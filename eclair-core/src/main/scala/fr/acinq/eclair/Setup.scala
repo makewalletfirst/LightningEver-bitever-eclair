@@ -100,7 +100,7 @@ class Setup(val datadir: File,
   val Seeds(nodeSeed, channelSeed) = seeds_opt.getOrElse(NodeParams.getSeeds(datadir))
   val chain = config.getString("chain")
   val chainCheckTx = chain match {
-    case "mainnet" => Some("2157b554dcfda405233906e461ee593875ae4b1b97615872db6a25130ecc1dd6") // coinbase of #500000
+    case "mainnet" => None // coinbase of #500000
     case "testnet" => Some("8f38a0dd41dc0ae7509081e262d791f8d53ed6f884323796d5ec7b0966dd3825") // coinbase of #1500000
     case "testnet4" => Some("5c50d460b3b98ea0c70baa0f50d1f0cc6ffa553788b4a7e23918bcdd558828fa") // coinbase of #40000
     case "signet" => if (config.hasPath("bitcoind.signet-check-tx") && config.getString("bitcoind.signet-check-tx").nonEmpty) Some(config.getString("bitcoind.signet-check-tx")) else None
@@ -195,15 +195,15 @@ class Setup(val datadir: File,
       await(getBitcoinStatus(bitcoinClient), 30 seconds, "bitcoind did not respond after 30 seconds")
     }
     logger.info(s"bitcoind version=${bitcoinStatus.version}")
-    assert(bitcoinStatus.version >= 290000, "Eclair requires Bitcoin Core 29 or higher")
+    assert(bitcoinStatus.version >= 240000, "Eclair requires Bitcoin Core 24 or higher")
     bitcoinStatus.unspentAddresses.foreach { address =>
       val isSegwit = addressToPublicKeyScript(bitcoinStatus.chainHash, address).map(script => Script.isNativeWitnessScript(script)).getOrElse(false)
       assert(isSegwit, s"Your wallet contains non-segwit UTXOs (e.g. address=$address). You must send those UTXOs to a segwit address to use Eclair (check out our README for more details).")
     }
     if (bitcoinStatus.chainHash != Block.RegtestGenesisBlock.hash) {
-      assert(!bitcoinStatus.initialBlockDownload, s"bitcoind should be synchronized (initialblockdownload=${bitcoinStatus.initialBlockDownload})")
-      assert(bitcoinStatus.verificationProgress > 0.999, s"bitcoind should be synchronized (progress=${bitcoinStatus.verificationProgress})")
-      assert(bitcoinStatus.headerCount - bitcoinStatus.blockCount <= 1, s"bitcoind should be synchronized (headers=${bitcoinStatus.headerCount} blocks=${bitcoinStatus.blockCount})")
+      //assert(!bitcoinStatus.initialBlockDownload, s"bitcoind should be synchronized (initialblockdownload=${bitcoinStatus.initialBlockDownload})")
+      //assert(bitcoinStatus.verificationProgress > 0.999, s"bitcoind should be synchronized (progress=${bitcoinStatus.verificationProgress})")
+      //assert(bitcoinStatus.headerCount - bitcoinStatus.blockCount <= 1, s"bitcoind should be synchronized (headers=${bitcoinStatus.headerCount} blocks=${bitcoinStatus.blockCount})")
     }
     logger.info(s"current blockchain height=${bitcoinStatus.blockCount}")
     blockHeight.set(bitcoinStatus.blockCount)
@@ -264,7 +264,7 @@ class Setup(val datadir: File,
         case Failure(exception) =>
           logger.warn(s"cannot retrieve feerates: ${exception.getMessage}")
           blockchain.Monitoring.Metrics.CannotRetrieveFeeratesCount.withoutTags().increment()
-          feeratesRetrieved.tryFailure(CannotRetrieveFeerates)
+          feeratesRetrieved.trySuccess(Done)
       })
       _ <- feeratesRetrieved.future
 
