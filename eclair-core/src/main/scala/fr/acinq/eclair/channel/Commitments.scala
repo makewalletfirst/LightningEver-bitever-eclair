@@ -171,6 +171,10 @@ object LocalCommit {
                     fundingKey: PrivateKey, remoteFundingPubKey: PublicKey, commitInput: InputInfo,
                     commit: CommitSig, localCommitIndex: Long, spec: CommitmentSpec, commitmentFormat: CommitmentFormat): Either[ChannelException, LocalCommit] = {
     val (localCommitTx, htlcTxs) = Commitment.makeLocalTxs(channelParams, commitParams, commitKeys, localCommitIndex, fundingKey, remoteFundingPubKey, commitInput, commitmentFormat, spec)
+    // DEBUG
+    org.slf4j.LoggerFactory.getLogger("DEBUG_fromCommitSig").error(
+      s"fromCommitSig DEBUG: fundingTxId=$fundingTxId commitInput.outPoint=${commitInput.outPoint} commitInput.txOut=${commitInput.txOut} localCommitTxId=${localCommitTx.tx.txid} localCommitTx=${localCommitTx.tx} spec.toLocal=${spec.toLocal} spec.toRemote=${spec.toRemote} spec.feerate=${spec.commitTxFeerate} format=$commitmentFormat localFundingPubKey=${fundingKey.publicKey} remoteFundingPubKey=$remoteFundingPubKey"
+    )
     val remoteCommitSigOk = commitmentFormat match {
       case _: SegwitV0CommitmentFormat => localCommitTx.checkRemoteSig(fundingKey.publicKey, remoteFundingPubKey, commit.signature)
       case _: SimpleTaprootChannelCommitmentFormat => commit.sigOrPartialSig match {
@@ -717,7 +721,7 @@ case class Commitment(fundingTxIndex: Long,
         }
         // We have already validated the remote nonce and partial signature when we received it, so we're guaranteed
         // that the following code cannot produce an error.
-        val Right(localSig) = unsignedCommitTx.partialSign(fundingKey, remoteFundingPubKey, localNonce, Seq(localNonce.publicNonce, remoteSig.nonce))
+        val Right(localSig) = unsignedCommitTx.partialSign(fundingKey, remoteFundingPubKey, localNonce, Scripts.sortNonces(Seq(fundingKey.publicKey -> localNonce.publicNonce, remoteFundingPubKey -> remoteSig.nonce)))
         val Right(signedTx) = unsignedCommitTx.aggregateSigs(fundingKey.publicKey, remoteFundingPubKey, localSig, remoteSig)
         signedTx
     }

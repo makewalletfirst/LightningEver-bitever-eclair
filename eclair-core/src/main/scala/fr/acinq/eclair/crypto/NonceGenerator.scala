@@ -4,6 +4,7 @@ import fr.acinq.bitcoin.scalacompat.Crypto.{PrivateKey, PublicKey}
 import fr.acinq.bitcoin.scalacompat.Musig2.LocalNonce
 import fr.acinq.bitcoin.scalacompat.{ByteVector32, Musig2, TxId}
 import fr.acinq.eclair.randomBytes32
+import fr.acinq.eclair.transactions.Scripts
 import grizzled.slf4j.Logging
 
 object NonceGenerator extends Logging {
@@ -17,7 +18,7 @@ object NonceGenerator extends Logging {
    * @return a deterministic nonce used to sign our local commit tx: its public part is sent to our peer.
    */
   def verificationNonce(fundingTxId: TxId, fundingPrivKey: PrivateKey, remoteFundingPubKey: PublicKey, commitIndex: Long): LocalNonce = {
-    Musig2.generateNonceWithCounter(commitIndex, fundingPrivKey, Seq(fundingPrivKey.publicKey, remoteFundingPubKey), None, Some(fundingTxId.value))
+    Musig2.generateNonceWithCounter(commitIndex, fundingPrivKey, Scripts.sort(Seq(fundingPrivKey.publicKey, remoteFundingPubKey)), None, Some(fundingTxId.value))
   }
 
   /**
@@ -25,7 +26,7 @@ object NonceGenerator extends Logging {
    */
   def signingNonce(localFundingPubKey: PublicKey, remoteFundingPubKey: PublicKey, fundingTxId: TxId): LocalNonce = {
     val sessionId = randomBytes32()
-    Musig2.generateNonce(sessionId, Right(localFundingPubKey), Seq(localFundingPubKey, remoteFundingPubKey), None, Some(fundingTxId.value))
+    Musig2.generateNonce(sessionId, Right(localFundingPubKey), Scripts.sort(Seq(localFundingPubKey, remoteFundingPubKey)), None, Some(fundingTxId.value))
   }
 
 }

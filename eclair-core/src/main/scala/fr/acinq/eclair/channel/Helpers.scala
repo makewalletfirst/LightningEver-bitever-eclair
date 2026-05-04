@@ -857,7 +857,7 @@ object Helpers {
                 case Some((closingTx, remoteSig, sigToTlv)) =>
                   val localFundingKey = channelKeys.fundingKey(commitment.fundingTxIndex)
                   val signedClosingTx_opt = for {
-                    localSig <- closingTx.partialSign(localFundingKey, commitment.remoteFundingPubKey, localNonce, Seq(localNonce.publicNonce, remoteSig.nonce)).toOption
+                    localSig <- closingTx.partialSign(localFundingKey, commitment.remoteFundingPubKey, localNonce, Scripts.sortNonces(Seq(localFundingKey.publicKey -> localNonce.publicNonce, commitment.remoteFundingPubKey -> remoteSig.nonce))).toOption
                     signedTx <- closingTx.aggregateSigs(localFundingKey.publicKey, commitment.remoteFundingPubKey, localSig, remoteSig).toOption
                   } yield (closingTx.copy(tx = signedTx), localSig.partialSig)
                   signedClosingTx_opt match {
@@ -931,7 +931,7 @@ object Helpers {
                   case None => return Left(InvalidCloseSignature(commitment.channelId, closingTx.tx.txid))
                 }
                 for {
-                  localSig <- closingTx.partialSign(localFundingKey, commitment.remoteFundingPubKey, localNonce, Seq(localNonce.publicNonce, remoteSig.nonce)).toOption
+                  localSig <- closingTx.partialSign(localFundingKey, commitment.remoteFundingPubKey, localNonce, Scripts.sortNonces(Seq(localFundingKey.publicKey -> localNonce.publicNonce, commitment.remoteFundingPubKey -> remoteSig.nonce))).toOption
                   signedTx <- closingTx.aggregateSigs(localFundingKey.publicKey, commitment.remoteFundingPubKey, localSig, remoteSig).toOption
                 } yield closingTx.copy(tx = signedTx)
             }

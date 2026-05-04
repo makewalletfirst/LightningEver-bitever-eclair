@@ -607,6 +607,9 @@ class Peer(val nodeParams: NodeParams,
         log.info("our peer recommends the following feerates: funding={}, commitment={}", msg.fundingFeerate, msg.commitmentFeerate)
         stay()
 
+      case Event(unknownMsg: UnknownMessage, d: ConnectedData) if unknownMsg.tag == 35017 =>
+        log.info("received FCMToken (tag=35017) from {}, no response needed", remoteNodeId)
+        stay()
       case Event(unknownMsg: UnknownMessage, d: ConnectedData) if nodeParams.pluginMessageTags.contains(unknownMsg.tag) =>
         context.system.eventStream.publish(UnknownMessageReceived(self, remoteNodeId, unknownMsg, d.connectionInfo))
         stay()
@@ -890,6 +893,7 @@ class Peer(val nodeParams: NodeParams,
 
     // We tell our peer what our current feerates are.
     val feerates = nodeParams.recommendedFeerates(remoteNodeId, connectionReady.localInit.features, connectionReady.remoteInit.features)
+    log.info("OUT msg=RecommendedFeerates fundingFeerate={} commitmentFeerate={}", feerates.fundingFeerate, feerates.commitmentFeerate)
     connectionReady.peerConnection ! feerates
 
     if (Features.canUseFeature(connectionReady.localInit.features, connectionReady.remoteInit.features, Features.FundingFeeCredit)) {

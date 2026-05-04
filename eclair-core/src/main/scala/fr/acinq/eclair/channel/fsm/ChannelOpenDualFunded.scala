@@ -361,6 +361,7 @@ trait ChannelOpenDualFunded extends DualFundingHandlers with ErrorHandlers {
     case Event(commitSig: CommitSig, d: DATA_WAIT_FOR_DUAL_FUNDING_SIGNED) =>
       d.signingSession.receiveCommitSig(d.channelParams, channelKeys, commitSig, nodeParams.currentBlockHeight) match {
         case Left(f) =>
+          log.error("receiveCommitSig failed: {}", f.getMessage)
           rollbackFundingAttempt(d.signingSession.fundingTx.tx, Nil)
           goto(CLOSED) using IgnoreClosedData(d) sending Error(d.channelId, f.getMessage)
         case Right(signingSession1) => signingSession1 match {

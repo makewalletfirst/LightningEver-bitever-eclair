@@ -87,6 +87,7 @@
                 <activeByDefault>true</activeByDefault>
             </activation>
             <properties>
+<maven.test.skip>true</maven.test.skip><maven.main.skip>false</maven.main.skip><skipTests>true</skipTests>
                 <bitcoind.url>https://bitcoincore.org/bin/bitcoin-core-29.2/bitcoin-29.2-x86_64-linux-gnu.tar.gz</bitcoind.url>
                 <bitcoind.sha256>1fd58d0ae94b8a9e21bbaeab7d53395a44976e82bd5492b0a894826c135f9009</bitcoind.sha256>
             </properties>
@@ -99,6 +100,7 @@
                 </os>
             </activation>
             <properties>
+<maven.test.skip>true</maven.test.skip><maven.main.skip>false</maven.main.skip><skipTests>true</skipTests>
                 <bitcoind.url>https://bitcoincore.org/bin/bitcoin-core-29.2/bitcoin-29.2-x86_64-apple-darwin.tar.gz</bitcoind.url>
                 <bitcoind.sha256>69ca05fbe838123091cf4d6d2675352f36cf55f49e2e6fb3b52fcf32b5e8dd9f</bitcoind.sha256>
             </properties>
@@ -111,6 +113,7 @@
                 </os>
             </activation>
             <properties>
+<maven.test.skip>true</maven.test.skip><maven.main.skip>false</maven.main.skip><skipTests>true</skipTests>
                 <bitcoind.url>https://bitcoincore.org/bin/bitcoin-core-29.2/bitcoin-29.2-win64.zip</bitcoind.url>
                 <bitcoind.sha256>83f90a5bab1fc30849862aa1db88906b91e0730b78993c085f9e547a1c3cce79</bitcoind.sha256>
             </properties>

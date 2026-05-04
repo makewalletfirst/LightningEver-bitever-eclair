@@ -49,6 +49,7 @@ object Scripts {
 
   /** Sort public keys using lexicographic ordering. */
   def sort(pubkeys: Seq[PublicKey]): Seq[PublicKey] = pubkeys.sortWith { (a, b) => LexicographicalOrdering.isLessThan(a.value, b.value) }
+  def sortNonces(nonces: Seq[(fr.acinq.bitcoin.scalacompat.Crypto.PublicKey, fr.acinq.bitcoin.scalacompat.Musig2.IndividualNonce)]): Seq[fr.acinq.bitcoin.scalacompat.Musig2.IndividualNonce] = nonces.sortWith { case ((k1, _), (k2, _)) => LexicographicalOrdering.isLessThan(k1.value, k2.value) }.map(_._2)
 
   def multiSig2of2(pubkey1: PublicKey, pubkey2: PublicKey): Seq[ScriptElt] = Script.createMultiSigMofN(2, sort(Seq(pubkey1, pubkey2)))
 
