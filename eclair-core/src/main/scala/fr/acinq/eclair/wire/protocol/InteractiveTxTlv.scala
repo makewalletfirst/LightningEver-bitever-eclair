@@ -126,17 +126,30 @@ object TxSignaturesTlv {
   /** When doing a splice for a taproot channel, each peer must provide their partial signature for the previous musig2 funding output. */
   case class PreviousFundingTxPartialSig(partialSigWithNonce: PartialSignatureWithNonce) extends TxSignaturesTlv
 
+  /** MuSig2 partial signature with nonces.
+   *  @param sig          32-byte partial signature.
+   *  @param localNonce   66-byte local nonce.
+   *  @param remoteNonce  66-byte remote nonce.
+   */
+  case class SwapInPartialSignature(sig: ByteVector, localNonce: IndividualNonce, remoteNonce: IndividualNonce)
+
+  val swapInPartialSignatureCodec: Codec[SwapInPartialSignature] = (
+    bytes(32) ::
+    publicNonce ::
+    publicNonce
+  ).as[SwapInPartialSignature]
+
   /** Server partial signatures for swap-in taproot inputs. */
-  case class SwapInServerPartialSigs(psigs: List[ByteVector64]) extends TxSignaturesTlv
+  case class SwapInServerPartialSigs(psigs: List[SwapInPartialSignature]) extends TxSignaturesTlv
 
   /** User partial signatures for swap-in taproot inputs. */
-  case class SwapInUserPartialSigs(psigs: List[ByteVector64]) extends TxSignaturesTlv
+  case class SwapInUserPartialSigs(psigs: List[SwapInPartialSignature]) extends TxSignaturesTlv
 
   val txSignaturesTlvCodec: Codec[TlvStream[TxSignaturesTlv]] = tlvStream(discriminated[TxSignaturesTlv].by(varint)
     .typecase(UInt64(2), tlvField(partialSignatureWithNonce.as[PreviousFundingTxPartialSig]))
     .typecase(UInt64(601), tlvField(bytes64.as[PreviousFundingTxSig]))
-    .typecase(UInt64(607), tlvField(list(bytes64).xmap[SwapInUserPartialSigs](ps => SwapInUserPartialSigs(ps), _.psigs)))
-    .typecase(UInt64(609), tlvField(list(bytes64).xmap[SwapInServerPartialSigs](ps => SwapInServerPartialSigs(ps), _.psigs)))
+    .typecase(UInt64(607), tlvField(list(swapInPartialSignatureCodec).xmap[SwapInUserPartialSigs](ps => SwapInUserPartialSigs(ps), _.psigs)))
+    .typecase(UInt64(609), tlvField(list(swapInPartialSignatureCodec).xmap[SwapInServerPartialSigs](ps => SwapInServerPartialSigs(ps), _.psigs)))
   )
 }
 
