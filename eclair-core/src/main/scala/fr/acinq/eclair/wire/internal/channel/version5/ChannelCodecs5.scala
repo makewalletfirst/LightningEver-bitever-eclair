@@ -212,19 +212,51 @@ private[channel] object ChannelCodecs5 {
         ("remoteOutputs" | listOfN(uint16, remoteInteractiveTxOutputCodec)) ::
         ("lockTime" | uint32)).as[InteractiveTxBuilder.SharedTransaction]
 
-    private val partiallySignedSharedTransactionCodec: Codec[InteractiveTxBuilder.PartiallySignedSharedTransaction] = (
-      ("sharedTx" | sharedTransactionCodec) ::
-        ("localSigs" | lengthDelimited(txSignaturesCodec))).as[InteractiveTxBuilder.PartiallySignedSharedTransaction]
+    // [A1 §7.1] swap-in params 필드를 디스크 codec 에 포함. 기존 PSST/FSST 행은 디코드 실패 — stuck swap-in 채널은 어차피 sqlite 에서 삭제 대상, NORMAL 채널은 ConfirmedFundingTx (0x04) 라 영향 없음.
+    private val swapInParamEntryCodec: Codec[(fr.acinq.eclair.UInt64, fr.acinq.eclair.wire.protocol.TxAddInputTlv.SwapInParams)] =
+      (("serialId" | uint64) :: ("params" | fr.acinq.eclair.wire.protocol.TxAddInputTlv.SwapInParams.codec))
+        .as[(fr.acinq.eclair.UInt64, fr.acinq.eclair.wire.protocol.TxAddInputTlv.SwapInParams)]
 
-    private val fullySignedSharedTransactionCodec: Codec[InteractiveTxBuilder.FullySignedSharedTransaction] = (
+    private val swapInParamsListCodec: Codec[Seq[(fr.acinq.eclair.UInt64, fr.acinq.eclair.wire.protocol.TxAddInputTlv.SwapInParams)]] =
+      listOfN(uint16, swapInParamEntryCodec).xmap[Seq[(fr.acinq.eclair.UInt64, fr.acinq.eclair.wire.protocol.TxAddInputTlv.SwapInParams)]](_.toSeq, _.toList)
+
+    private val partiallySignedSharedTransactionV1Codec = (
+      ("sharedTx" | sharedTransactionCodec) ::
+        ("localSigs" | lengthDelimited(txSignaturesCodec))).xmap[InteractiveTxBuilder.PartiallySignedSharedTransaction](
+      { case shapeless.::(tx, shapeless.::(sigs, shapeless.HNil)) => InteractiveTxBuilder.PartiallySignedSharedTransaction(tx, sigs, Nil) },
+      pst => shapeless.::(pst.tx, shapeless.::(pst.localSigs, shapeless.HNil))
+    )
+
+    private val partiallySignedSharedTransactionV2Codec = (
+      ("sharedTx" | sharedTransactionCodec) ::
+        ("localSigs" | lengthDelimited(txSignaturesCodec)) ::
+        ("swapInParams" | swapInParamsListCodec)).as[InteractiveTxBuilder.PartiallySignedSharedTransaction]
+
+    private val partiallySignedSharedTransactionCodec = partiallySignedSharedTransactionV2Codec
+
+    private val fullySignedSharedTransactionV1Codec = (
       ("sharedTx" | sharedTransactionCodec) ::
         ("localSigs" | lengthDelimited(txSignaturesCodec)) ::
         ("remoteSigs" | lengthDelimited(txSignaturesCodec)) ::
-        ("sharedSigs_opt" | optional(bool8, scriptWitnessCodec))).as[InteractiveTxBuilder.FullySignedSharedTransaction]
+        ("sharedSigs_opt" | optional(bool8, scriptWitnessCodec))).xmap[InteractiveTxBuilder.FullySignedSharedTransaction](
+      { case shapeless.::(tx, shapeless.::(ls, shapeless.::(rs, shapeless.::(ss, shapeless.HNil)))) => InteractiveTxBuilder.FullySignedSharedTransaction(tx, ls, rs, ss, Nil) },
+      fst => shapeless.::(fst.tx, shapeless.::(fst.localSigs, shapeless.::(fst.remoteSigs, shapeless.::(fst.sharedSigs_opt, shapeless.HNil))))
+    )
+
+    private val fullySignedSharedTransactionV2Codec = (
+      ("sharedTx" | sharedTransactionCodec) ::
+        ("localSigs" | lengthDelimited(txSignaturesCodec)) ::
+        ("remoteSigs" | lengthDelimited(txSignaturesCodec)) ::
+        ("sharedSigs_opt" | optional(bool8, scriptWitnessCodec)) ::
+        ("swapInParams" | swapInParamsListCodec)).as[InteractiveTxBuilder.FullySignedSharedTransaction]
+
+    private val fullySignedSharedTransactionCodec = fullySignedSharedTransactionV2Codec
 
     private val signedSharedTransactionCodec: Codec[InteractiveTxBuilder.SignedSharedTransaction] = discriminated[InteractiveTxBuilder.SignedSharedTransaction].by(uint16)
-      .typecase(0x01, partiallySignedSharedTransactionCodec)
-      .typecase(0x02, fullySignedSharedTransactionCodec)
+      .\(0x01) { case psst: InteractiveTxBuilder.PartiallySignedSharedTransaction if psst.swapInParams.isEmpty => psst }(partiallySignedSharedTransactionV1Codec)
+      .\(0x02) { case fsst: InteractiveTxBuilder.FullySignedSharedTransaction if fsst.swapInParams.isEmpty => fsst }(fullySignedSharedTransactionV1Codec)
+      .\(0x03) { case psst: InteractiveTxBuilder.PartiallySignedSharedTransaction if psst.swapInParams.nonEmpty => psst }(partiallySignedSharedTransactionV2Codec)
+      .\(0x04) { case fsst: InteractiveTxBuilder.FullySignedSharedTransaction if fsst.swapInParams.nonEmpty => fsst }(fullySignedSharedTransactionV2Codec)
 
     private val spentInputscodec: Codec[Seq[OutPoint]] = listOfN(uint16, outPointCodec).xmap(_.toSeq, _.toList)
 

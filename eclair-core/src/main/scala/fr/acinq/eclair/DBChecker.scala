@@ -40,7 +40,9 @@ object DBChecker extends Logging {
           case _ => ()
         }
         channels
-      case Failure(_) => throw IncompatibleDBException
+      case Failure(e) =>
+        logger.error(s"Failed to read channels DB: ", e)
+        throw IncompatibleDBException
     }
   }
 

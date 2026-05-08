@@ -146,11 +146,16 @@ case class TxSignatures(channelId: ByteVector32,
 
 object TxSignatures {
   def apply(channelId: ByteVector32, tx: Transaction, witnesses: Seq[ScriptWitness], previousFundingSig_opt: Option[ChannelSpendSignature]): TxSignatures = {
+    apply(channelId, tx, witnesses, previousFundingSig_opt, Nil)
+  }
+
+  def apply(channelId: ByteVector32, tx: Transaction, witnesses: Seq[ScriptWitness], previousFundingSig_opt: Option[ChannelSpendSignature], swapInServerPartialSigs: Seq[TxSignaturesTlv.SwapInPartialSignature]): TxSignatures = {
     val tlvs: Set[TxSignaturesTlv] = Set(
       previousFundingSig_opt.map {
         case IndividualSignature(sig) => TxSignaturesTlv.PreviousFundingTxSig(sig)
         case partialSig: PartialSignatureWithNonce => TxSignaturesTlv.PreviousFundingTxPartialSig(partialSig)
-      }
+      },
+      if (swapInServerPartialSigs.nonEmpty) Some(TxSignaturesTlv.SwapInServerPartialSigs(swapInServerPartialSigs.toList)) else None
     ).flatten
     TxSignatures(channelId, tx.txid, witnesses, TlvStream(tlvs))
   }

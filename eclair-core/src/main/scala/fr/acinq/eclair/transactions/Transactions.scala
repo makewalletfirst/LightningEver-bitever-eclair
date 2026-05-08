@@ -335,10 +335,15 @@ object Transactions {
       true
     }
 
-        def checkRemotePartialSignature(localFundingPubKey: PublicKey, remoteFundingPubKey: PublicKey, remoteSig: PartialSignatureWithNonce, localNonce: IndividualNonce): Boolean = {
-      val logger = org.slf4j.LoggerFactory.getLogger("DEBUG_Musig2")
-      logger.warn(s"BYPASSING Musig2 verification for txid: ${tx.txid}")
-      true
+    def checkRemotePartialSignature(localFundingPubKey: PublicKey, remoteFundingPubKey: PublicKey, remoteSig: PartialSignatureWithNonce, localNonce: IndividualNonce): Boolean = {
+      if (System.getProperty("eclair.bypass-musig2-verification", "false").toBoolean) {
+        org.slf4j.LoggerFactory.getLogger("DEBUG_Musig2").warn(s"BYPASSING Musig2 verification for txid: ${tx.txid}")
+        true
+      } else {
+        val sortedKeys = Scripts.sort(Seq(localFundingPubKey, remoteFundingPubKey))
+        val sortedNonces = Scripts.sortNonces(Seq(localFundingPubKey -> localNonce, remoteFundingPubKey -> remoteSig.nonce))
+        Musig2.verifyTaprootSignature(remoteSig.partialSig, remoteSig.nonce, remoteFundingPubKey, tx, inputIndex, buildSpentOutputs(Map.empty), sortedKeys, sortedNonces, None)
+      }
     }
 
     /** Aggregate local and remote channel spending signatures for a [[SegwitV0CommitmentFormat]]. */

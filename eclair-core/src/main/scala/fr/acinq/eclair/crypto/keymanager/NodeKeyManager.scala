@@ -29,4 +29,9 @@ trait NodeKeyManager {
    *         private key given in parameter. recoveryId is the corresponding recoveryId of the signature
    */
   def signDigest(digest: ByteVector32, privateKey: PrivateKey = nodeKey.privateKey): (ByteVector64, Int)
+
+  /**
+   * Derive a swap-in server private key for a given user (identified by their node id).
+   */
+  def deriveSwapInServerKey(remoteNodeId: PublicKey): PrivateKey
 }
