@@ -721,7 +721,7 @@ case class Commitment(fundingTxIndex: Long,
         }
         // We have already validated the remote nonce and partial signature when we received it, so we're guaranteed
         // that the following code cannot produce an error.
-        val Right(localSig) = unsignedCommitTx.partialSign(fundingKey, remoteFundingPubKey, localNonce, Scripts.sortNonces(Seq(fundingKey.publicKey -> localNonce.publicNonce, remoteFundingPubKey -> remoteSig.nonce)))
+        val Right(localSig) = unsignedCommitTx.partialSign(fundingKey, remoteFundingPubKey, localNonce, Seq(localNonce.publicNonce, remoteSig.nonce))
         val Right(signedTx) = unsignedCommitTx.aggregateSigs(fundingKey.publicKey, remoteFundingPubKey, localSig, remoteSig)
         signedTx
     }

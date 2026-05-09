@@ -336,14 +336,14 @@ object Transactions {
     }
 
     def checkRemotePartialSignature(localFundingPubKey: PublicKey, remoteFundingPubKey: PublicKey, remoteSig: PartialSignatureWithNonce, localNonce: IndividualNonce): Boolean = {
-      if (System.getProperty("eclair.bypass-musig2-verification", "false").toBoolean) {
-        org.slf4j.LoggerFactory.getLogger("DEBUG_Musig2").warn(s"BYPASSING Musig2 verification for txid: ${tx.txid}")
-        true
-      } else {
-        val sortedKeys = Scripts.sort(Seq(localFundingPubKey, remoteFundingPubKey))
-        val sortedNonces = Scripts.sortNonces(Seq(localFundingPubKey -> localNonce, remoteFundingPubKey -> remoteSig.nonce))
-        Musig2.verifyTaprootSignature(remoteSig.partialSig, remoteSig.nonce, remoteFundingPubKey, tx, inputIndex, buildSpentOutputs(Map.empty), sortedKeys, sortedNonces, None)
+      val sortedKeys = Scripts.sort(Seq(localFundingPubKey, remoteFundingPubKey))
+      // KMP: listOf(localNonce, remoteSig.nonce) — local first, no key-based sorting.
+      val isValid = Musig2.verifyTaprootSignature(remoteSig.partialSig, remoteSig.nonce, remoteFundingPubKey, tx, inputIndex, buildSpentOutputs(Map.empty), sortedKeys, Seq(localNonce, remoteSig.nonce), None)
+      if (!isValid) {
+        org.slf4j.LoggerFactory.getLogger("DEBUG_Musig2").error(
+          s"[Musig2] checkRemotePartialSignature FAILED txid=${tx.txid} local=$localFundingPubKey remote=$remoteFundingPubKey localNonce=$localNonce remoteNonce=${remoteSig.nonce}")
       }
+      isValid
     }
 
     /** Aggregate local and remote channel spending signatures for a [[SegwitV0CommitmentFormat]]. */
@@ -356,7 +356,8 @@ object Transactions {
     def aggregateSigs(localFundingPubkey: PublicKey, remoteFundingPubkey: PublicKey, localSig: PartialSignatureWithNonce, remoteSig: PartialSignatureWithNonce, extraUtxos: Map[OutPoint, TxOut]): Either[Throwable, Transaction] = {
       val spentOutputs = buildSpentOutputs(extraUtxos)
       for {
-        aggregatedSignature <- Musig2.aggregateTaprootSignatures(Seq(localSig.partialSig, remoteSig.partialSig), tx, inputIndex, spentOutputs, sort(Seq(localFundingPubkey, remoteFundingPubkey)), Scripts.sortNonces(Seq(localFundingPubkey -> localSig.nonce, remoteFundingPubkey -> remoteSig.nonce)), None)
+        // KMP: listOf(localSig.nonce, remoteSig.nonce) — local first, no key-based sorting.
+        aggregatedSignature <- Musig2.aggregateTaprootSignatures(Seq(localSig.partialSig, remoteSig.partialSig), tx, inputIndex, spentOutputs, sort(Seq(localFundingPubkey, remoteFundingPubkey)), Seq(localSig.nonce, remoteSig.nonce), None)
         witness = Script.witnessKeyPathPay2tr(aggregatedSignature)
       } yield tx.updateWitness(inputIndex, witness)
     }

@@ -113,7 +113,7 @@ object InteractiveTxBuilder {
       commitmentFormat match {
         case _: SegwitV0CommitmentFormat => Right(spliceTx.sign(localFundingKey, remoteFundingPubkey, spentUtxos))
         case _: SimpleTaprootChannelCommitmentFormat => (localNonce_opt, remoteNonce_opt) match {
-          case (Some(localNonce), Some(remoteNonce)) => spliceTx.partialSign(localFundingKey, remoteFundingPubkey, spentUtxos, localNonce, Scripts.sortNonces(Seq(localFundingKey.publicKey -> localNonce.publicNonce, remoteFundingPubkey -> remoteNonce))) match {
+          case (Some(localNonce), Some(remoteNonce)) => spliceTx.partialSign(localFundingKey, remoteFundingPubkey, spentUtxos, localNonce, Seq(localNonce.publicNonce, remoteNonce)) match {
             case Left(_) => Left(InvalidFundingNonce(channelId, tx.txid))
             case Right(sig) => Right(sig)
           }
@@ -990,7 +990,7 @@ private class InteractiveTxBuilder(replyTo: ActorRef[InteractiveTxBuilder.Respon
             remoteCommitNonces_opt match {
               case Some(remoteNonces) =>
                 val localNonce = NonceGenerator.signingNonce(localFundingKey.publicKey, fundingParams.remoteFundingPubKey, fundingTx.txid)
-                remoteCommitTx.partialSign(localFundingKey, fundingParams.remoteFundingPubKey, localNonce, Scripts.sortNonces(Seq(localFundingKey.publicKey -> localNonce.publicNonce, fundingParams.remoteFundingPubKey -> remoteNonces.commitNonce))) match {
+                remoteCommitTx.partialSign(localFundingKey, fundingParams.remoteFundingPubKey, localNonce, Seq(localNonce.publicNonce, remoteNonces.commitNonce)) match {
                   case Left(_) => Left(InvalidCommitNonce(channelParams.channelId, fundingTx.txid, purpose.remoteCommitIndex))
                   case Right(localSig) => Right(localSig)
                 }

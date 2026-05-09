@@ -18,7 +18,8 @@ object NonceGenerator extends Logging {
    * @return a deterministic nonce used to sign our local commit tx: its public part is sent to our peer.
    */
   def verificationNonce(fundingTxId: TxId, fundingPrivKey: PrivateKey, remoteFundingPubKey: PublicKey, commitIndex: Long): LocalNonce = {
-    Musig2.generateNonceWithCounter(commitIndex, fundingPrivKey, Scripts.sort(Seq(fundingPrivKey.publicKey, remoteFundingPubKey)), None, Some(fundingTxId.value))
+    // KMP uses [localKey, remoteKey] (no sort) for keyAggContext — must match to produce same nonce value.
+    Musig2.generateNonceWithCounter(commitIndex, fundingPrivKey, Seq(fundingPrivKey.publicKey, remoteFundingPubKey), None, Some(fundingTxId.value))
   }
 
   /**
@@ -26,7 +27,8 @@ object NonceGenerator extends Logging {
    */
   def signingNonce(localFundingPubKey: PublicKey, remoteFundingPubKey: PublicKey, fundingTxId: TxId): LocalNonce = {
     val sessionId = randomBytes32()
-    Musig2.generateNonce(sessionId, Right(localFundingPubKey), Scripts.sort(Seq(localFundingPubKey, remoteFundingPubKey)), None, Some(fundingTxId.value))
+    // KMP uses [localKey, remoteKey] (no sort) for keyAggContext — must match to produce same nonce value.
+    Musig2.generateNonce(sessionId, Right(localFundingPubKey), Seq(localFundingPubKey, remoteFundingPubKey), None, Some(fundingTxId.value))
   }
 
 }
