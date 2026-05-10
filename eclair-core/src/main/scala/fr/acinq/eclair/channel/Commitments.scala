@@ -180,7 +180,10 @@ object LocalCommit {
       case _: SimpleTaprootChannelCommitmentFormat => commit.sigOrPartialSig match {
         case _: IndividualSignature => false
         case remoteSig: PartialSignatureWithNonce =>
-          val localNonce = NonceGenerator.verificationNonce(fundingTxId, fundingKey, remoteFundingPubKey, localCommitIndex)
+          // Phoenix signed using the nonce from Eclair's previous RevokeAndAck:
+          // RevokeAndAck sends verificationNonce(txId, key, remotePubKey, oldLocalCommitIndex + 2)
+          // where oldLocalCommitIndex = localCommitIndex - 1, so the nonce index = localCommitIndex + 1.
+          val localNonce = NonceGenerator.verificationNonce(fundingTxId, fundingKey, remoteFundingPubKey, localCommitIndex + 1)
           localCommitTx.checkRemotePartialSignature(fundingKey.publicKey, remoteFundingPubKey, remoteSig, localNonce.publicNonce)
       }
     }
@@ -218,7 +221,9 @@ case class RemoteCommit(index: Long, spec: CommitmentSpec, txId: TxId, remotePer
         remoteNonce_opt match {
           case Some(remoteNonce) =>
             val localNonce = NonceGenerator.signingNonce(fundingKey.publicKey, remoteFundingPubKey, commitInput.outPoint.txid)
-            remoteCommitTx.partialSign(fundingKey, remoteFundingPubKey, localNonce, Seq(localNonce.publicNonce, remoteNonce)) match {
+            // sortedKeys = sort([eclairKey, phoenixKey]) = [phoenix(idx0), eclair(idx1)]
+            // publicNonces[i] must match sortedKeys[i]: [remoteNonce(phoenix), localNonce(eclair)]
+            remoteCommitTx.partialSign(fundingKey, remoteFundingPubKey, localNonce, Seq(remoteNonce, localNonce.publicNonce)) match {
               case Left(_) => Left(InvalidCommitNonce(channelParams.channelId, commitInput.outPoint.txid, index))
               case Right(psig) => Right(CommitSig(channelParams.channelId, psig, htlcSigs.toList, batchSize))
             }
@@ -673,7 +678,10 @@ case class Commitment(fundingTxIndex: Long,
         nextRemoteNonce_opt match {
           case Some(remoteNonce) =>
             val localNonce = NonceGenerator.signingNonce(fundingKey.publicKey, remoteFundingPubKey, fundingTxId)
-            remoteCommitTx.partialSign(fundingKey, remoteFundingPubKey, localNonce, Seq(localNonce.publicNonce, remoteNonce)) match {
+            // sortedKeys = sort([eclairKey, phoenixKey]) = [phoenix(idx0), eclair(idx1)]
+            // publicNonces[i] must correspond to sortedKeys[i]:
+            //   publicNonces[0] = remoteNonce (phoenix), publicNonces[1] = localNonce (eclair)
+            remoteCommitTx.partialSign(fundingKey, remoteFundingPubKey, localNonce, Seq(remoteNonce, localNonce.publicNonce)) match {
               case Left(_) => return Left(InvalidCommitNonce(params.channelId, fundingTxId, remoteCommit.index + 1))
               case Right(psig) => psig
             }
@@ -713,15 +721,18 @@ case class Commitment(fundingTxIndex: Long,
         val localSig = unsignedCommitTx.sign(fundingKey, remoteFundingPubKey)
         unsignedCommitTx.aggregateSigs(fundingKey.publicKey, remoteFundingPubKey, localSig, remoteSig)
       case remoteSig: PartialSignatureWithNonce =>
+        // RevokeAndAck sends verificationNonce(txId, key, remotePubKey, localCommitIndex + 2).
+        // Phoenix uses that nonce when signing the NEXT commit (index N+1).
+        // So for localCommit.index = N+1, the correct nonce index is (N+1) + 1 = localCommit.index + 1.
+        // (The previous RevokeAndAck at index N sent nonce for index N+2 = (N+1)+1.)
+        val nonceIndex = localCommit.index + 1
         val localNonce = if (fundingTxIndex == 0 && localCommit.index == 0 && !params.channelFeatures.hasFeature(Features.DualFunding)) {
-          // With channel establishment v1, we exchange the first nonce before the funding tx and remote funding key are known.
-          NonceGenerator.verificationNonce(NonceGenerator.dummyFundingTxId, fundingKey, NonceGenerator.dummyRemoteFundingPubKey, localCommit.index)
+          NonceGenerator.verificationNonce(NonceGenerator.dummyFundingTxId, fundingKey, NonceGenerator.dummyRemoteFundingPubKey, nonceIndex)
         } else {
-          NonceGenerator.verificationNonce(fundingTxId, fundingKey, remoteFundingPubKey, localCommit.index)
+          NonceGenerator.verificationNonce(fundingTxId, fundingKey, remoteFundingPubKey, nonceIndex)
         }
-        // Phoenix signs Eclair's local commit with publicNonces=[phoenixSignNonce, eclairVerifNonce].
-        // Eclair must sign with the SAME publicNonces=[remoteSig.nonce=phoenixNonce, localNonce=eclairNonce]
-        // so both partial sigs use the same AggregatedNonce and same participant indices.
+        // Phoenix signs with publicNonces=[phoenixSignNonce(idx0), eclairVerifNonce(idx1)].
+        // Eclair must use same session: [remoteSig.nonce=phoenixNonce, localNonce=eclairNonce].
         val Right(localSig) = unsignedCommitTx.partialSign(fundingKey, remoteFundingPubKey, localNonce, Seq(remoteSig.nonce, localNonce.publicNonce))
         val Right(signedTx) = unsignedCommitTx.aggregateSigs(fundingKey.publicKey, remoteFundingPubKey, localSig, remoteSig)
         signedTx
