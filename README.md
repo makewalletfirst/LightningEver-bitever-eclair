@@ -1,3 +1,5 @@
+브랜치: `main` (운영) / `260517_FIN` (스냅샷) / `260519_legacy` (레거시 스왑인 수정) <br>
+
 # LightningEver-bitever-eclair (SAVE Branch)
 
 BitEver Lightning Network의 LSP(Lightning Service Provider) 노드입니다.  
