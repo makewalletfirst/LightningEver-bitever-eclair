@@ -608,7 +608,27 @@ class Peer(val nodeParams: NodeParams,
         stay()
 
       case Event(unknownMsg: UnknownMessage, d: ConnectedData) if unknownMsg.tag == 35017 =>
-        log.info("received FCMToken (tag=35017) from {}, no response needed", remoteNodeId)
+        // [LightningEver] Phoenix FCM token: wire = [u16 len][len bytes UTF-8 token]
+        val data = unknownMsg.data
+        if (data.size < 2) {
+          log.warning("FCMToken too short: {} bytes from {}", data.size, remoteNodeId)
+        } else {
+          val len = ((data(0) & 0xff) << 8) | (data(1) & 0xff)
+          if (data.size < 2 + len) {
+            log.warning("FCMToken truncated from {}: declared len={}, payload size={}", remoteNodeId, len, data.size)
+          } else {
+            val tokenBytes = data.slice(2, 2 + len).toArray
+            val token = new String(tokenBytes, java.nio.charset.StandardCharsets.UTF_8)
+            // platform is not transmitted on the wire; default to "fcm" (Android FCM). iOS Phoenix uses APNs via a different path.
+            log.info("FCMToken registered for {}: ...{} (len={})", remoteNodeId, token.takeRight(8), len)
+            context.system.eventStream.publish(FcmTokenRegistered(remoteNodeId, token, "fcm"))
+          }
+        }
+        stay()
+      case Event(unknownMsg: UnknownMessage, d: ConnectedData) if unknownMsg.tag == 35019 =>
+        // [LightningEver] Phoenix UnsetFCMToken: peer is opting out of push notifications.
+        log.info("FCMToken unset by {}", remoteNodeId)
+        context.system.eventStream.publish(FcmTokenUnregistered(remoteNodeId))
         stay()
       case Event(unknownMsg: UnknownMessage, d: ConnectedData) if nodeParams.pluginMessageTags.contains(unknownMsg.tag) =>
         context.system.eventStream.publish(UnknownMessageReceived(self, remoteNodeId, unknownMsg, d.connectionInfo))

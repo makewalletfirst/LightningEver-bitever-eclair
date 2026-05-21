@@ -312,11 +312,15 @@ class NodeRelay private(nodeParams: NodeParams,
     Behaviors.receiveMessagePartial {
       rejectExtraHtlcPartialFunction orElse {
         case info: WrappedPeerInfo =>
-          // DEV-BYPASS for BitEver: always treat recipient as a wallet peer so that on-the-fly
-          // funding is attempted when local routing fails. Without this, recipients without
-          // wake_up_notification_client advertised end up with walletNodeId_opt=None and the
-          // payment fails with "route not found" instead of triggering on-the-fly funding.
-          val walletNodeId_opt = Some(recipient.nodeId)
+          // [LightningEver 2026-05-21] Restored to ACINQ original feature-gated logic AFTER
+          // confirming via experiment that the dev-bypass (forcing walletNodeId_opt=Some) is the
+          // trigger for the reverse-HTLC reserve-violation force-close pattern. The feature-gated
+          // branch is the safe default. Combined with `peer-wake-up.enabled=false` below, this
+          // makes NodeRelay fall back to plain relay() for all sends, so failed routing produces
+          // a clean UpdateFailHtlc to the sender rather than a force-close.
+          val walletNodeId_opt = info.remoteFeatures_opt.flatMap { features =>
+            if (features.hasFeature(Features.WakeUpNotificationClient)) Some(recipient.nodeId) else None
+          }
           walletNodeId_opt match {
             case Some(walletNodeId) if nodeParams.peerWakeUpConfig.enabled => attemptWakeUp(upstream, walletNodeId, recipient, nextPayload, nextPacket_opt)
             case _ => relay(upstream, recipient, walletNodeId_opt, None, nextPayload, nextPacket_opt)
